@@ -5,20 +5,19 @@ A rocket powered landing with successive convexification
 author: Sven Niederberger
         Atsushi Sakai
 
-Ref:
+Reference:
 - Python implementation of 'Successive Convexification for 6-DoF Mars Rocket Powered Landing with Free-Final-Time' paper
 by Michael Szmuk and Behcet Acıkmese.
 
 - EmbersArc/SuccessiveConvexificationFreeFinalTime: Implementation of "Successive Convexification for 6-DoF Mars Rocket Powered Landing with Free-Final-Time" https://github.com/EmbersArc/SuccessiveConvexificationFreeFinalTime
 
 """
-
+import warnings
 from time import time
 import numpy as np
 from scipy.integrate import odeint
 import cvxpy
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
 
 # Trajectory points
 K = 50
@@ -32,7 +31,8 @@ W_DELTA = 1e-3  # difference in state/input
 W_DELTA_SIGMA = 1e-1  # difference in flight time
 W_NU = 1e5  # virtual control
 
-solver = 'ECOS'
+print(cvxpy.installed_solvers())
+solver = 'CLARABEL'
 verbose_solver = False
 
 show_animation = True
@@ -43,7 +43,7 @@ class Rocket_Model_6DoF:
     A 6 degree of freedom rocket landing problem.
     """
 
-    def __init__(self):
+    def __init__(self, rng):
         """
         A large r_scale for a small scale problem will
         ead to numerical problems as parameters become excessively small
@@ -92,7 +92,7 @@ class Rocket_Model_6DoF:
         # Vector from thrust point to CoM
         self.r_T_B = np.array([-1e-2, 0., 0.])
 
-        self.set_random_initial_state()
+        self.set_random_initial_state(rng)
 
         self.x_init = np.concatenate(
             ((self.m_wet,), self.r_I_init, self.v_I_init, self.q_B_I_init, self.w_B_init))
@@ -102,29 +102,32 @@ class Rocket_Model_6DoF:
         self.r_scale = np.linalg.norm(self.r_I_init)
         self.m_scale = self.m_wet
 
-    def set_random_initial_state(self):
+    def set_random_initial_state(self, rng):
+        if rng is None:
+            rng = np.random.default_rng()
+
         self.r_I_init = np.array((0., 0., 0.))
-        self.r_I_init[0] = np.random.uniform(3, 4)
-        self.r_I_init[1:3] = np.random.uniform(-2, 2, size=2)
+        self.r_I_init[0] = rng.uniform(3, 4)
+        self.r_I_init[1:3] = rng.uniform(-2, 2, size=2)
 
         self.v_I_init = np.array((0., 0., 0.))
-        self.v_I_init[0] = np.random.uniform(-1, -0.5)
-        self.v_I_init[1:3] = np.random.uniform(
-            -0.5, -0.2, size=2) * self.r_I_init[1:3]
+        self.v_I_init[0] = rng.uniform(-1, -0.5)
+        self.v_I_init[1:3] = rng.uniform(-0.5, -0.2,
+                                         size=2) * self.r_I_init[1:3]
 
         self.q_B_I_init = self.euler_to_quat((0,
-                                              np.random.uniform(-30, 30),
-                                              np.random.uniform(-30, 30)))
+                                              rng.uniform(-30, 30),
+                                              rng.uniform(-30, 30)))
         self.w_B_init = np.deg2rad((0,
-                                    np.random.uniform(-20, 20),
-                                    np.random.uniform(-20, 20)))
+                                    rng.uniform(-20, 20),
+                                    rng.uniform(-20, 20)))
 
     def f_func(self, x, u):
-        m, rx, ry, rz, vx, vy, vz, q0, q1, q2, q3, wx, wy, wz = x[0], x[1], x[
+        m, _, _, _, vx, vy, vz, q0, q1, q2, q3, wx, wy, wz = x[0], x[1], x[
             2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12], x[13]
         ux, uy, uz = u[0], u[1], u[2]
 
-        return np.matrix([
+        return np.array([
             [-0.01 * np.sqrt(ux**2 + uy**2 + uz**2)],
             [vx],
             [vy],
@@ -145,11 +148,11 @@ class Rocket_Model_6DoF:
         ])
 
     def A_func(self, x, u):
-        m, rx, ry, rz, vx, vy, vz, q0, q1, q2, q3, wx, wy, wz = x[0], x[1], x[
+        m, _, _, _, _, _, _, q0, q1, q2, q3, wx, wy, wz = x[0], x[1], x[
             2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12], x[13]
         ux, uy, uz = u[0], u[1], u[2]
 
-        return np.matrix([
+        return np.array([
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -173,11 +176,11 @@ class Rocket_Model_6DoF:
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
 
     def B_func(self, x, u):
-        m, rx, ry, rz, vx, vy, vz, q0, q1, q2, q3, wx, wy, wz = x[0], x[1], x[
+        m, _, _, _, _, _, _, q0, q1, q2, q3, _, _, _ = x[0], x[1], x[
             2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12], x[13]
         ux, uy, uz = u[0], u[1], u[2]
 
-        return np.matrix([
+        return np.array([
             [-0.01 * ux / np.sqrt(ux**2 + uy**2 + uz**2),
              -0.01 * uy / np.sqrt(ux ** 2 + uy**2 + uz**2),
              -0.01 * uz / np.sqrt(ux**2 + uy**2 + uz**2)],
@@ -219,14 +222,14 @@ class Rocket_Model_6DoF:
         return q
 
     def skew(self, v):
-        return np.matrix([
+        return np.array([
             [0, -v[2], v[1]],
             [v[2], 0, -v[0]],
             [-v[1], v[0], 0]
         ])
 
     def dir_cosine(self, q):
-        return np.matrix([
+        return np.array([
             [1 - 2 * (q[2] ** 2 + q[3] ** 2), 2 * (q[1] * q[2]
                                                    + q[0] * q[3]), 2 * (q[1] * q[3] - q[0] * q[2])],
             [2 * (q[1] * q[2] - q[0] * q[3]), 1 - 2
@@ -236,7 +239,7 @@ class Rocket_Model_6DoF:
         ])
 
     def omega(self, w):
-        return np.matrix([
+        return np.array([
             [0, -w[0], -w[1], -w[2]],
             [w[0], 0, w[2], -w[1]],
             [w[1], -w[2], 0, w[0]],
@@ -304,7 +307,7 @@ class Rocket_Model_6DoF:
         ]
 
         # linearized lower thrust constraint
-        rhs = [U_last_p[:, k] / cvxpy.norm(U_last_p[:, k]) * U_v[:, k]
+        rhs = [U_last_p[:, k] / cvxpy.norm(U_last_p[:, k]) @ U_v[:, k]
                for k in range(X_v.shape[1])]
         constraints += [
             self.T_min <= cvxpy.vstack(rhs)
@@ -460,11 +463,11 @@ class SCProblem:
         # x_t+1 = A_*x_t+B_*U_t+C_*U_T+1*S_*sigma+zbar+nu
         constraints += [
             self.var['X'][:, k + 1] ==
-            cvxpy.reshape(self.par['A_bar'][:, k], (m.n_x, m.n_x)) *
+            cvxpy.reshape(self.par['A_bar'][:, k], (m.n_x, m.n_x), order='F') @
             self.var['X'][:, k] +
-            cvxpy.reshape(self.par['B_bar'][:, k], (m.n_x, m.n_u)) *
+            cvxpy.reshape(self.par['B_bar'][:, k], (m.n_x, m.n_u), order='F') @
             self.var['U'][:, k] +
-            cvxpy.reshape(self.par['C_bar'][:, k], (m.n_x, m.n_u)) *
+            cvxpy.reshape(self.par['C_bar'][:, k], (m.n_x, m.n_u), order='F') @
             self.var['U'][:, k + 1] +
             self.par['S_bar'][:, k] * self.var['sigma'] +
             self.par['z_bar'][:, k] +
@@ -531,8 +534,10 @@ class SCProblem:
     def solve(self, **kwargs):
         error = False
         try:
-            self.prob.solve(verbose=verbose_solver,
-                            solver=solver)
+            with warnings.catch_warnings():  # For User warning from solver
+                warnings.simplefilter('ignore')
+                self.prob.solve(verbose=verbose_solver,
+                                solver=solver)
         except cvxpy.SolverError:
             error = True
 
@@ -566,10 +571,10 @@ def axis3d_equal(X, Y, Z, ax):
 def plot_animation(X, U):  # pragma: no cover
 
     fig = plt.figure()
-    ax = fig.gca(projection='3d')
+    ax = fig.add_subplot(projection='3d')
     # for stopping simulation with the esc key.
     fig.canvas.mpl_connect('key_release_event',
-            lambda event: [exit(0) if event.key == 'escape' else None])
+                           lambda event: [exit(0) if event.key == 'escape' else None])
 
     for k in range(K):
         plt.cla()
@@ -606,9 +611,9 @@ def plot_animation(X, U):  # pragma: no cover
         plt.pause(0.5)
 
 
-def main():
+def main(rng=None):
     print("start!!")
-    m = Rocket_Model_6DoF()
+    m = Rocket_Model_6DoF(rng)
 
     # state and input list
     X = np.empty(shape=[m.n_x, K])

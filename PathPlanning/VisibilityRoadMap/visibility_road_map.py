@@ -6,31 +6,29 @@ author: Atsushi Sakai (@Atsushi_twi)
 
 """
 
-import os
 import sys
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import pathlib
+sys.path.append(str(pathlib.Path(__file__).parent.parent))
 
-from PathPlanning.VisibilityRoadMap.geometry import Geometry
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) +
-                "/../VoronoiRoadMap/")
-from dijkstra_search import DijkstraSearch
+from VisibilityRoadMap.geometry import Geometry
+from VoronoiRoadMap.dijkstra_search import DijkstraSearch
 
 show_animation = True
 
 
 class VisibilityRoadMap:
 
-    def __init__(self, robot_radius, do_plot=False):
-        self.robot_radius = robot_radius
+    def __init__(self, expand_distance, do_plot=False):
+        self.expand_distance = expand_distance
         self.do_plot = do_plot
 
     def planning(self, start_x, start_y, goal_x, goal_y, obstacles):
 
-        nodes = self.generate_graph_node(start_x, start_y, goal_x, goal_y,
-                                         obstacles)
+        nodes = self.generate_visibility_nodes(start_x, start_y,
+                                               goal_x, goal_y, obstacles)
 
         road_map_info = self.generate_road_map_info(nodes, obstacles)
 
@@ -48,7 +46,8 @@ class VisibilityRoadMap:
 
         return rx, ry
 
-    def generate_graph_node(self, start_x, start_y, goal_x, goal_y, obstacles):
+    def generate_visibility_nodes(self, start_x, start_y, goal_x, goal_y,
+                                  obstacles):
 
         # add start and goal as nodes
         nodes = [DijkstraSearch.Node(start_x, start_y),
@@ -63,8 +62,9 @@ class VisibilityRoadMap:
             for (vx, vy) in zip(cvx_list, cvy_list):
                 nodes.append(DijkstraSearch.Node(vx, vy))
 
-        for node in nodes:
-            plt.plot(node.x, node.y, "xr")
+        if self.do_plot:
+            for node in nodes:
+                plt.plot(node.x, node.y, "xr")
 
         return nodes
 
@@ -129,8 +129,8 @@ class VisibilityRoadMap:
         offset_vec = math.atan2(math.sin(p_vec) + math.sin(n_vec),
                                 math.cos(p_vec) + math.cos(
                                     n_vec)) + math.pi / 2.0
-        offset_x = x + self.robot_radius * math.cos(offset_vec)
-        offset_y = y + self.robot_radius * math.sin(offset_vec)
+        offset_x = x + self.expand_distance * math.cos(offset_vec)
+        offset_y = y + self.expand_distance * math.sin(offset_vec)
         return offset_x, offset_y
 
     @staticmethod
@@ -184,7 +184,7 @@ def main():
     sx, sy = 10.0, 10.0  # [m]
     gx, gy = 50.0, 50.0  # [m]
 
-    robot_radius = 5.0  # [m]
+    expand_distance = 5.0  # [m]
 
     obstacles = [
         ObstaclePolygon(
@@ -209,8 +209,8 @@ def main():
         plt.axis("equal")
         plt.pause(1.0)
 
-    rx, ry = VisibilityRoadMap(robot_radius, do_plot=show_animation).planning(
-        sx, sy, gx, gy, obstacles)
+    rx, ry = VisibilityRoadMap(expand_distance, do_plot=show_animation)\
+        .planning(sx, sy, gx, gy, obstacles)
 
     if show_animation:  # pragma: no cover
         plt.plot(rx, ry, "-r")

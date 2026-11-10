@@ -6,7 +6,7 @@ author: Joe Dinius, Ph.D (https://jwdinius.github.io)
         Atsushi Sakai (@Atsushi_twi)
 
 Refs:
-- https://jwdinius.github.io/blog/2018/eta3traj
+- https://jwdinius.github.io/blog/2018/eta3traj/
 - [eta^3-Splines for the Smooth Path Generation of Wheeled Mobile Robots]
 (https://ieeexplore.ieee.org/document/4339545/)
 
@@ -16,24 +16,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import sys
-import os
-sys.path.append(os.path.relpath("../Eta3SplinePath"))
+import pathlib
+sys.path.append(str(pathlib.Path(__file__).parent.parent))
 
-try:
-    from eta3_spline_path import Eta3Path, Eta3PathSegment
-except ImportError:
-    raise
+from Eta3SplinePath.eta3_spline_path import Eta3Path, Eta3PathSegment
 
 show_animation = True
 
 
 class MaxVelocityNotReached(Exception):
     def __init__(self, actual_vel, max_vel):
-        self.message = 'Actual velocity {} does not equal desired max velocity {}!'.format(
-            actual_vel, max_vel)
+        self.message = f'Actual velocity {actual_vel} does not equal desired max velocity {max_vel}!'
 
 
-class eta3_trajectory(Eta3Path):
+class Eta3SplineTrajectory(Eta3Path):
     """
     eta3_trajectory
 
@@ -45,7 +41,7 @@ class eta3_trajectory(Eta3Path):
         # ensure that all inputs obey the assumptions of the model
         assert max_vel > 0 and v0 >= 0 and a0 >= 0 and max_accel > 0 and max_jerk > 0 \
             and a0 <= max_accel and v0 <= max_vel
-        super(eta3_trajectory, self).__init__(segments=segments)
+        super(__class__, self).__init__(segments=segments)
         self.total_length = sum([s.segment_length for s in self.segments])
         self.max_vel = float(max_vel)
         self.v0 = float(v0)
@@ -169,7 +165,7 @@ class eta3_trajectory(Eta3Path):
         try:
             assert np.isclose(self.vels[index], 0)
         except AssertionError as e:
-            print('The final velocity {} is not zero'.format(self.vels[index]))
+            print(f'The final velocity {self.vels[index]} is not zero')
             raise e
 
         self.seg_lengths[index] = s_sf
@@ -304,8 +300,8 @@ def test1(max_vel=0.5):
         trajectory_segments.append(Eta3PathSegment(
             start_pose=start_pose, end_pose=end_pose, eta=eta, kappa=kappa))
 
-        traj = eta3_trajectory(trajectory_segments,
-                               max_vel=max_vel, max_accel=0.5)
+        traj = Eta3SplineTrajectory(trajectory_segments,
+                                    max_vel=max_vel, max_accel=0.5)
 
         # interpolate at several points along the path
         times = np.linspace(0, traj.total_time, 101)
@@ -338,8 +334,8 @@ def test2(max_vel=0.5):
         trajectory_segments.append(Eta3PathSegment(
             start_pose=start_pose, end_pose=end_pose, eta=eta, kappa=kappa))
 
-        traj = eta3_trajectory(trajectory_segments,
-                               max_vel=max_vel, max_accel=0.5)
+        traj = Eta3SplineTrajectory(trajectory_segments,
+                                    max_vel=max_vel, max_accel=0.5)
 
         # interpolate at several points along the path
         times = np.linspace(0, traj.total_time, 101)
@@ -404,8 +400,8 @@ def test3(max_vel=2.0):
         start_pose=start_pose, end_pose=end_pose, eta=eta, kappa=kappa))
 
     # construct the whole path
-    traj = eta3_trajectory(trajectory_segments,
-                           max_vel=max_vel, max_accel=0.5, max_jerk=1)
+    traj = Eta3SplineTrajectory(trajectory_segments,
+                                max_vel=max_vel, max_accel=0.5, max_jerk=1)
 
     # interpolate at several points along the path
     times = np.linspace(0, traj.total_time, 1001)

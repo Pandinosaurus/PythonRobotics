@@ -6,12 +6,17 @@ author: Atsushi Sakai (@Atsushi_twi)
 
 """
 
+import sys
+import pathlib
+sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
+
 import math
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial.transform import Rotation as Rot
 import scipy.linalg
+
+from utils.angle import rot_mat_2d
 
 # Covariance for UKF simulation
 Q = np.diag([
@@ -64,8 +69,8 @@ def motion_model(x, u):
                   [0, 0, 1.0, 0],
                   [0, 0, 0, 0]])
 
-    B = np.array([[DT * math.cos(x[2]), 0],
-                  [DT * math.sin(x[2]), 0],
+    B = np.array([[DT * math.cos(x[2, 0]), 0],
+                  [DT * math.sin(x[2, 0]), 0],
                   [0.0, DT],
                   [1.0, 0.0]])
 
@@ -86,6 +91,29 @@ def observation_model(x):
 
 
 def generate_sigma_points(xEst, PEst, gamma):
+    """
+    Generate sigma points for UKF.
+
+    Sigma points are deterministically sampled points used to capture
+    the mean and covariance of the state distribution.
+
+    Parameters
+    ----------
+    xEst : numpy.ndarray
+        Current state estimate (n x 1)
+    PEst : numpy.ndarray
+        Current state covariance estimate (n x n)
+    gamma : float
+        Scaling parameter sqrt(n + lambda)
+
+    Returns
+    -------
+    sigma : numpy.ndarray
+        Sigma points (n x 2n+1)
+        sigma[:, 0] = xEst
+        sigma[:, 1:n+1] = xEst + gamma * sqrt(P)
+        sigma[:, n+1:2n+1] = xEst - gamma * sqrt(P)
+    """
     sigma = xEst
     Psqrt = scipy.linalg.sqrtm(PEst)
     n = len(xEst[:, 0])
@@ -144,6 +172,35 @@ def calc_pxz(sigma, x, z_sigma, zb, wc):
 
 
 def ukf_estimation(xEst, PEst, z, u, wm, wc, gamma):
+    """
+    Unscented Kalman Filter estimation.
+
+    Performs one iteration of UKF state estimation using the unscented transform.
+
+    Parameters
+    ----------
+    xEst : numpy.ndarray
+        Current state estimate [x, y, yaw, v]^T (4 x 1)
+    PEst : numpy.ndarray
+        Current state covariance estimate (4 x 4)
+    z : numpy.ndarray
+        Observation vector [x_obs, y_obs]^T (2 x 1)
+    u : numpy.ndarray
+        Control input [velocity, yaw_rate]^T (2 x 1)
+    wm : numpy.ndarray
+        Weights for calculating mean (1 x 2n+1)
+    wc : numpy.ndarray
+        Weights for calculating covariance (1 x 2n+1)
+    gamma : float
+        Sigma point scaling parameter sqrt(n + lambda)
+
+    Returns
+    -------
+    xEst : numpy.ndarray
+        Updated state estimate (4 x 1)
+    PEst : numpy.ndarray
+        Updated state covariance estimate (4 x 4)
+    """
     #  Predict
     sigma = generate_sigma_points(xEst, PEst, gamma)
     sigma = predict_sigma_motion(sigma, u)
@@ -182,14 +239,38 @@ def plot_covariance_ellipse(xEst, PEst):  # pragma: no cover
     x = [a * math.cos(it) for it in t]
     y = [b * math.sin(it) for it in t]
     angle = math.atan2(eigvec[1, bigind], eigvec[0, bigind])
-    rot = Rot.from_euler('z', angle).as_matrix()[0:2, 0:2]
-    fx = rot @ np.array([x, y])
+    fx = rot_mat_2d(angle) @ np.array([x, y])
     px = np.array(fx[0, :] + xEst[0, 0]).flatten()
     py = np.array(fx[1, :] + xEst[1, 0]).flatten()
     plt.plot(px, py, "--r")
 
 
 def setup_ukf(nx):
+    """
+    Setup UKF parameters and weights.
+
+    Calculates the weights for mean and covariance computation,
+    and the scaling parameter gamma for sigma point generation.
+
+    Parameters
+    ----------
+    nx : int
+        Dimension of the state vector
+
+    Returns
+    -------
+    wm : numpy.ndarray
+        Weights for calculating mean (1 x 2n+1)
+        wm[0] = lambda / (n + lambda)
+        wm[i] = 1 / (2(n + lambda)) for i > 0
+    wc : numpy.ndarray
+        Weights for calculating covariance (1 x 2n+1)
+        wc[0] = lambda / (n + lambda) + (1 - alpha^2 + beta)
+        wc[i] = 1 / (2(n + lambda)) for i > 0
+    gamma : float
+        Sigma point scaling parameter sqrt(n + lambda)
+        where lambda = alpha^2 * (n + kappa) - n
+    """
     lamb = ALPHA ** 2 * (nx + KAPPA) - nx
     # calculate weights
     wm = [lamb / (lamb + nx)]

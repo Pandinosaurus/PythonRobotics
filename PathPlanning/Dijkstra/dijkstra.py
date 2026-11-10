@@ -12,7 +12,7 @@ import math
 show_animation = True
 
 
-class Dijkstra:
+class DijkstraPlanner:
 
     def __init__(self, ox, oy, resolution, robot_radius):
         """
@@ -71,7 +71,7 @@ class Dijkstra:
         open_set, closed_set = dict(), dict()
         open_set[self.calc_index(start_node)] = start_node
 
-        while 1:
+        while True:
             c_id = min(open_set, key=lambda o: open_set[o].cost)
             current = open_set[c_id]
 
@@ -221,20 +221,20 @@ def main():
     # set obstacle positions
     ox, oy = [], []
     for i in range(-10, 60):
-        ox.append(i)
+        ox.append(float(i))
         oy.append(-10.0)
     for i in range(-10, 60):
         ox.append(60.0)
-        oy.append(i)
+        oy.append(float(i))
     for i in range(-10, 61):
-        ox.append(i)
+        ox.append(float(i))
         oy.append(60.0)
     for i in range(-10, 61):
         ox.append(-10.0)
-        oy.append(i)
+        oy.append(float(i))
     for i in range(-10, 40):
         ox.append(20.0)
-        oy.append(i)
+        oy.append(float(i))
     for i in range(0, 40):
         ox.append(40.0)
         oy.append(60.0 - i)
@@ -246,7 +246,7 @@ def main():
         plt.grid(True)
         plt.axis("equal")
 
-    dijkstra = Dijkstra(ox, oy, grid_size, robot_radius)
+    dijkstra = DijkstraPlanner(ox, oy, grid_size, robot_radius)
     rx, ry = dijkstra.planning(sx, sy, gx, gy)
 
     if show_animation:  # pragma: no cover

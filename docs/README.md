@@ -8,7 +8,7 @@ This folder contains documentation for the Python Robotics project.
 #### Install Sphinx and Theme
 
 ```
-pip install sphinx sphinx-autobuild sphinx-rtd-theme
+pip install sphinx sphinx-autobuild sphinx-rtd-theme sphinx_rtd_dark_mode sphinx_copybutton sphinx_rtd_dark_mode
 ```
 
 #### Building the Docs
@@ -24,14 +24,6 @@ if you want to building each time a file is changed:
 sphinx-autobuild . _build/html
 ```
 
-### Jupyter notebook integration
+#### Check the generated doc
 
-When you want to generate rst files from each jupyter notebooks,
-
-you can use
-
-```
-cd path/to/docs
-python jupyternotebook2rst.py
-```
-
+Open the index.html file under docs/_build/
